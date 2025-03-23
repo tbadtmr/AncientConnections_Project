@@ -63,92 +63,7 @@ test_users = {
 }
 
 #%%
-# CHOOSE SAMPLE INPUT METHOD
-#______________________________________________________________________________
-
-# App Title
-st.markdown("<h1 style='text-align: left;'>🧬 Ancient Connections</h1>", unsafe_allow_html=True)
-st.markdown("""**Trace your maternal ancestry through DNA connections & find ancient shared ancestors in an interactive timeline.**""")
-
-# App Layout (2 columns)
-col1, col2 = st.columns([1, 2])
-
-# Order Epochs for selection
-epoch_order = [
-    "Modern Age", "Middle Ages", "Iron Age", "Bronze Age",
-    "Neolithic", "Mesolithic", "Paleolithic"
-]
-
-# User Selection Methods
-with col1:
-    # First Person
-    user1_method = st.radio("**Select Person 1**", ["Test User", "Manual Input", "Database Sample"], key="user1_method")
-    
-    # Select one of the test users
-    if user1_method == "Test User":
-        user1 = st.selectbox("Select a test user", list(test_users.keys()), key="user1")
-        user1_haplo = test_users[user1]["mtDNA"]
-        user1_year = 2025
-        
-    # Manually input user
-    elif user1_method == "Manual Input":
-        user1_haplo = st.text_input("Enter mtDNA haplogroup", key="user1_haplo")
-        user1_year = st.number_input("Enter estimated year (negative for BCE)", value=1000, key="user1_year")
-        
-    # Choose Database sample
-    else:
-        # Filter dataset to exclude N/A values in mt_hg column
-        valid_data = AADR_data[AADR_data["mt_hg"].notna() & (AADR_data["mt_hg"] != "N/A")]
-        continent1 = st.selectbox("Select continent", valid_data["Continent"].unique(), key="continent1")
-        country1 = st.selectbox("Select country", valid_data[valid_data["Continent"] == continent1]["Country"].unique(), key="country1")
-
-        # Filter valid epochs for the selected country
-        epoch1_list = valid_data[(valid_data["Continent"] == continent1) & (valid_data["Country"] == country1)]["Epoch"].dropna().unique()
-        epoch1_sorted = sorted(epoch1_list, key=lambda x: epoch_order.index(x) if x in epoch_order else len(epoch_order))
-        epoch1 = st.selectbox("Select epoch", epoch1_sorted, key="epoch1")
-
-        # Select sample only from valid data
-        sample1 = st.selectbox("Select sample", valid_data[
-            (valid_data["Continent"] == continent1) &
-            (valid_data["Country"] == country1) &
-            (valid_data["Epoch"] == epoch1)
-        ]["Identifier"], key="sample1")
-
-        # Retrieve the mt_hg and Year values
-        user1_haplo = valid_data[valid_data["Identifier"] == sample1]["mt_hg"].values[0]
-        user1_year = valid_data[valid_data["Identifier"] == sample1]["Year"].values[0]
-
-    # Repeat for Person 2
-    user2_method = st.radio("**Select Person 2**", ["Test User", "Manual Input", "Database Sample"], key="user2_method")
-
-    if user2_method == "Test User":
-        user2 = st.selectbox("Select a test user", list(test_users.keys()), key="user2")
-        user2_haplo = test_users[user2]["mtDNA"]
-        user2_year = 2025
-    elif user2_method == "Manual Input":
-        user2_haplo = st.text_input("Enter mtDNA haplogroup", key="user2_haplo")
-        user2_year = st.number_input("Enter estimated year (negative for BCE)", value=-1000, key="user2_year")
-    else:
-        valid_data = AADR_data[AADR_data["mt_hg"].notna() & (AADR_data["mt_hg"] != "N/A")]
-        continent2 = st.selectbox("Select continent", valid_data["Continent"].unique(), key="continent2")
-        country2 = st.selectbox("Select country", valid_data[valid_data["Continent"] == continent2]["Country"].unique(), key="country2")
-        epoch2_list = valid_data[(valid_data["Continent"] == continent2) & (valid_data["Country"] == country2)]["Epoch"].dropna().unique()
-        epoch2_sorted = sorted(epoch2_list, key=lambda x: epoch_order.index(x) if x in epoch_order else len(epoch_order))
-        epoch2 = st.selectbox("Select epoch", epoch2_sorted, key="epoch2")
-
-        sample2 = st.selectbox("Select sample", valid_data[
-            (valid_data["Continent"] == continent2) &
-            (valid_data["Country"] == country2) &
-            (valid_data["Epoch"] == epoch2)
-        ]["Identifier"], key="sample2")
-
-        user2_haplo = valid_data[valid_data["Identifier"] == sample2]["mt_hg"].values[0]
-        user2_year = valid_data[valid_data["Identifier"] == sample2]["Year"].values[0]
-
-#%%
-# GET MOST RECENT HAPLOGROUP AND LINEAGE
-#______________________________________________________________________________
-
+#FUNCTIONS
 
 def get_lineage(haplogroup, tree):
     """
@@ -197,6 +112,114 @@ def find_common_mtDNA(haplo1, haplo2, tree):
         else:
             break
     return common_ancestor
+
+#%%
+# CHOOSE SAMPLE INPUT METHOD
+#______________________________________________________________________________
+
+# App Title
+st.markdown("<h1 style='text-align: left;'>🧬 Ancient Connections</h1>", unsafe_allow_html=True)
+st.markdown("""**Trace your maternal ancestry through DNA connections & find ancient shared ancestors in an interactive timeline.**""")
+
+# App Layout (2 columns)
+col1, col2 = st.columns([1, 2])
+
+# Order Epochs for selection
+epoch_order = [
+    "Modern Age", "Middle Ages", "Iron Age", "Bronze Age",
+    "Neolithic", "Mesolithic", "Paleolithic"
+]
+
+# User Selection Methods
+with col1:
+    # First Person
+    user1_method = st.radio("**Select Person 1**", ["Test User", "Manual Input", "Database Sample"], key="user1_method")
+    
+    # Select one of the test users
+    if user1_method == "Test User":
+        user1 = st.selectbox("Select a test user", list(test_users.keys()), key="user1")
+        user1_haplo = test_users[user1]["mtDNA"]
+        user1_year = 2025
+        
+    # Manually input user
+    elif user1_method == "Manual Input":
+        user1_haplo = None
+        user1_haplo_input = st.text_input("Enter mtDNA haplogroup", key="user1_haplo")
+        user1_year = st.number_input("Enter estimated year (negative for BCE)", value=1000, key="user1_year")
+
+        if user1_haplo_input:
+            haplo = user1_haplo_input.strip().upper()
+        # Validate haplogroup entry
+            if haplo in phylo_tree:
+                user1_haplo = haplo
+            else:
+                st.warning("Please enter a valid Haplogroup.")
+
+    # Choose Database sample
+    else:
+        # Filter dataset to exclude N/A values in mt_hg column
+        valid_data = AADR_data[AADR_data["mt_hg"].notna() & (AADR_data["mt_hg"] != "N/A")]
+        continent1 = st.selectbox("Select continent", valid_data["Continent"].unique(), key="continent1")
+        country1 = st.selectbox("Select country", valid_data[valid_data["Continent"] == continent1]["Country"].unique(), key="country1")
+
+        # Filter valid epochs for the selected country
+        epoch1_list = valid_data[(valid_data["Continent"] == continent1) & (valid_data["Country"] == country1)]["Epoch"].dropna().unique()
+        epoch1_sorted = sorted(epoch1_list, key=lambda x: epoch_order.index(x) if x in epoch_order else len(epoch_order))
+        epoch1 = st.selectbox("Select epoch", epoch1_sorted, key="epoch1")
+
+        # Select sample only from valid data
+        sample1 = st.selectbox("Select sample", valid_data[
+            (valid_data["Continent"] == continent1) &
+            (valid_data["Country"] == country1) &
+            (valid_data["Epoch"] == epoch1)
+        ]["Identifier"], key="sample1")
+
+        # Retrieve the mt_hg and Year values
+        user1_haplo = valid_data[valid_data["Identifier"] == sample1]["mt_hg"].values[0]
+        user1_year = valid_data[valid_data["Identifier"] == sample1]["Year"].values[0]
+
+    # Repeat for Person 2
+    user2_method = st.radio("**Select Person 2**", ["Test User", "Manual Input", "Database Sample"], key="user2_method")
+
+    if user2_method == "Test User":
+        user2 = st.selectbox("Select a test user", list(test_users.keys()), key="user2")
+        user2_haplo = test_users[user2]["mtDNA"]
+        user2_year = 2025
+    elif user2_method == "Manual Input":
+        user2_haplo = None
+        user2_haplo_input = st.text_input("Enter mtDNA haplogroup", key="user2_haplo")
+        user2_year = st.number_input("Enter estimated year (negative for BCE)", value=1000, key="user2_year")
+
+        if user2_haplo_input:
+            haplo = user2_haplo_input.strip().upper()
+        # Validate haplogroup entry
+            if haplo in phylo_tree:
+                user2_haplo = haplo
+            else:
+                st.warning("Please enter a valid Haplogroup.")
+    else:
+        valid_data = AADR_data[AADR_data["mt_hg"].notna() & (AADR_data["mt_hg"] != "N/A")]
+        continent2 = st.selectbox("Select continent", valid_data["Continent"].unique(), key="continent2")
+        country2 = st.selectbox("Select country", valid_data[valid_data["Continent"] == continent2]["Country"].unique(), key="country2")
+        epoch2_list = valid_data[(valid_data["Continent"] == continent2) & (valid_data["Country"] == country2)]["Epoch"].dropna().unique()
+        epoch2_sorted = sorted(epoch2_list, key=lambda x: epoch_order.index(x) if x in epoch_order else len(epoch_order))
+        epoch2 = st.selectbox("Select epoch", epoch2_sorted, key="epoch2")
+
+        sample2 = st.selectbox("Select sample", valid_data[
+            (valid_data["Continent"] == continent2) &
+            (valid_data["Country"] == country2) &
+            (valid_data["Epoch"] == epoch2)
+        ]["Identifier"], key="sample2")
+
+        user2_haplo = valid_data[valid_data["Identifier"] == sample2]["mt_hg"].values[0]
+        user2_year = valid_data[valid_data["Identifier"] == sample2]["Year"].values[0]
+
+#%%
+# GET MOST RECENT HAPLOGROUP AND LINEAGE
+#______________________________________________________________________________
+
+
+
 
 
 # Find Most Recent Common Ancestor Haplogroup
