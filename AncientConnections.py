@@ -228,6 +228,81 @@ else:
 # FIND ANCESTORS IN DATABANK
 #______________________________________________________________________________
 
+most_recent_identifier, most_recent_haplogroup, most_recent_year, most_recent_year2, most_recent_country = None, None, None, None, None
+most_ancient_identifier, most_ancient_haplogroup, most_ancient_year, most_ancient_year2, most_ancient_country = None, None, None, None, None
+traceback_samples = []
+related_samples = []
+show_recent = False
+show_ancient = False
+show_traceback = False
+show_relatives = False
+show_common_mtDNA = False
+
+# Get all ancient samples from the lineage
+lineage_samples = mtDNA_data[
+    # Must be in shared lineage
+    (mtDNA_data["mt_hg"].isin(shared_lineage_set)) &
+    # Must be older than both users
+    (mtDNA_data["year_from"] <= min(user1_year, user2_year))
+]
+
+# Get most recent connection (EXACT haplogroup match)
+if not lineage_samples.empty:
+    recent_ancestor = lineage_samples[lineage_samples["mt_hg"] == common_mtDNA]
+    if not recent_ancestor.empty:
+        recent_ancestor = recent_ancestor.sort_values(by="year_from", ascending=False).iloc[0]  # Youngest match
+        most_recent_identifier = recent_ancestor["identifier"]
+        most_recent_haplogroup = recent_ancestor["mt_hg"]
+        most_recent_year = recent_ancestor["year_from"]
+        most_recent_year2 = recent_ancestor["year_to"]
+        most_recent_country = recent_ancestor["country"]
+        most_recent_sex = recent_ancestor["sex"]
+        most_recent_region = recent_ancestor["region"]
+        most_recent_epoch = recent_ancestor["epoch"]
+        show_recent = True
+
+# Get most ancient connection (EXACT haplogroup match)
+if not lineage_samples.empty:
+    ancient_ancestor = lineage_samples[lineage_samples["mt_hg"] == common_mtDNA]
+    if not ancient_ancestor.empty:
+        ancient_ancestor = ancient_ancestor.sort_values(by="year_from", ascending=True).iloc[0]  # Oldest match
+        most_ancient_identifier = ancient_ancestor["identifier"]
+        most_ancient_haplogroup = ancient_ancestor["mt_hg"]
+        most_ancient_year = ancient_ancestor["year_from"]
+        most_ancient_year2 = ancient_ancestor["year_to"]
+        most_ancient_country = ancient_ancestor["country"]
+        most_ancient_sex = ancient_ancestor["sex"]
+        most_ancient_region = ancient_ancestor["region"]
+        most_ancient_epoch = ancient_ancestor["epoch"]
+        show_ancient = True
+
+# Check if both are the same sample, if so hide one
+if (show_recent and show_ancient and 
+    most_recent_identifier == most_ancient_identifier):
+    show_recent = False
+
+if show_ancient == False:
+    show_common_mtDNA = True
+    
+# Check if there more ancient samples from the lineage
+if show_ancient:
+    # Only look for ancestors older than the most ancient ancestor
+    lineage_samples["year_from"] = pd.to_numeric(lineage_samples["year_from"], errors="coerce")
+    additional_ancestors = lineage_samples[
+        lineage_samples["year_from"] < most_ancient_year
+        ]
+else:
+    # If no ancient ancestor was found, include all lineage samples
+    additional_ancestors = lineage_samples.copy()
+
+# Oder additional ancestors
+additional_ancestors["lineage_depth"] = additional_ancestors["mt_hg"].apply(
+    lambda hg: shared_lineage.index(hg) if hg in shared_lineage else len(shared_lineage)
+)
+# Sort first by lineage (following haplogroup tree), then by year
+additional_ancestors = additional_ancestors.sort_values(by=["lineage_depth", "year_from"], ascending=[True, True])
+# Convert to list format
+additional_ancestors_list = additional_ancestors.to_dict(orient="records")
 
 # %%
 # PLOT
