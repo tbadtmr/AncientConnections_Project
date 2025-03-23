@@ -150,6 +150,80 @@ with col1:
 #______________________________________________________________________________
 
 
+def get_lineage(haplogroup, tree):
+    """
+    Returns the ancestral path of a haplogroup up to the root (mt-MRCA).
+    If a haplogroup is missing, it finds the closest known parent.
+    """
+    lineage = []
+
+    # If haplogroup is missing, try to infer its closest known ancestor
+    if haplogroup not in tree:
+        haplogroup = infer_parent(haplogroup, tree) or "mt-MRCA"
+
+    # Traverse the tree upwards
+    while haplogroup in tree and tree[haplogroup] is not None:
+        lineage.append(haplogroup)
+        haplogroup = tree[haplogroup]
+
+    lineage.append("mt-MRCA")  # Ensure root is included
+    return lineage[::-1]  # Reverse to start from the root
+
+def infer_parent(haplogroup, tree):
+    """
+    Tries to infer the most likely parent haplogroup if it's missing in the tree.
+    It progressively removes numbers from the haplogroup name (e.g., R1a2 → R1a).
+    """
+    while haplogroup:
+        haplogroup = re.sub(r'\d+$', '', haplogroup)  # Remove trailing numbers
+        if haplogroup in tree:
+            return haplogroup  # Found a valid parent in the tree
+        if len(haplogroup) <= 1:  # Prevent guessing too far back
+            break
+    return None  # No valid parent found
+
+def find_common_mtDNA(haplo1, haplo2, tree):
+    """
+    Finds the Most Recent Common Ancestor (MRCA) of two haplogroups.
+    """
+    lineage1 = get_lineage(haplo1, tree)
+    lineage2 = get_lineage(haplo2, tree)
+
+    # Find the last common ancestor
+    common_ancestor = "mt-MRCA"
+    for h1, h2 in zip(lineage1, lineage2):
+        if h1 == h2:
+            common_ancestor = h1
+        else:
+            break
+    return common_ancestor
+
+
+# Find Most Recent Common Ancestor Haplogroup
+#----------------------------------------------
+common_mtDNA = find_common_mtDNA(user1_haplo, user2_haplo, phylo_tree)
+
+# Get lineage
+#---------------------------------------------
+# Compute Shared Lineage (From mt-MRCA to Shared Haplogroup)**
+shared_lineage = get_lineage(common_mtDNA, phylo_tree)
+shared_lineage_set = set(shared_lineage)  # ✅ Convert to set for faster lookups
+
+# Compute Individual Lineages
+user1_lineage = get_lineage(user1_haplo, phylo_tree)
+user2_lineage = get_lineage(user2_haplo, phylo_tree)
+
+# Extract the Part of the Lineage That Differs
+if common_mtDNA in user1_lineage:
+    lineage_to_user1 = user1_lineage[user1_lineage.index(common_mtDNA):]  # From MRCA → User 1
+else:
+    lineage_to_user1 = ["Not found"]
+if common_mtDNA in user2_lineage:
+    lineage_to_user2 = user2_lineage[user2_lineage.index(common_mtDNA):]  # From MRCA → User 2
+else:
+    lineage_to_user2 = ["Not found"]
+
+
 #%%
 # FIND ANCESTORS IN DATABANK
 #______________________________________________________________________________
