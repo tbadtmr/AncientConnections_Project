@@ -41,8 +41,8 @@ import pandas as pd
 import re
 
 # Define the input and output file paths
-input_file = r"\\wsl.localhost\Ubuntu\home\tabead16\ancient_connections\Data\AADR_Annotation.xlsx"
-output_file = r"\\wsl.localhost\Ubuntu\home\tabead16\ancient_connections\Data\AADR_clean3.xlsx"
+input_file = r"\\Data\AADR_Annotation.xlsx"
+output_file = r"\\Data\AADR_cleaned.xlsx"
 
 # Load the Excel file
 xls = pd.ExcelFile(input_file)
