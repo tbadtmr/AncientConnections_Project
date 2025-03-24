@@ -32,8 +32,8 @@ User-defined functions:
 - format_year(year):
     restructures continous timescale back to historical annotation (BCE, CE)
 
-Version: 1.00  
-Date: 2025-03-13  
+Version: 2.00  
+Date: 2025-03-24  
 Name: Tabea Dittmar
 """
 
