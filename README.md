@@ -51,7 +51,9 @@ All required data is included in the `Data/` folder.
 ## Project Repository
 
 You can find the full project, source code, and documentation at:
-  GitHub: tbadtmr/AncientConnections_Project
+  - GitHub: tbadtmr/AncientConnections_Project
+
+--
 
 **Have Fun Exploring!**
 Whether you're tracing your own maternal line or diving into the deep ancestry of ancient populations —
