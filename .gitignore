@@ -1,0 +1,6 @@
+# Ignore old versions of the app
+AncientConnections_beforeY.py
+AncientConnections_original.py
+
+# Ignore large or sensitive files in the Data folder
+Data/AADR_Annotation.xlsx
