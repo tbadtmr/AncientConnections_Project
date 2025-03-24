@@ -1,17 +1,39 @@
+#!/usr/bin/python3
 #%% 
 # DOCUMENTATION SECTION - Ancient Connections App
 #______________________________________________________________________________
-#!/usr/bin/python3
+
 """
 Description:
+Ancient Connections is an interactive Streamlit application for tracing shared maternal ancestry 
+between modern users and ancient individuals based on mitochondrial DNA (mtDNA) haplogroups. 
+It identifies the most recent common maternal ancestor and visualizes related ancient samples 
+on a timeline with lineage paths and historical context.
 
 Procedure:
+1. Load user input (test user, manual entry, or ancient sample).
+2. Determine the most recent common haplogroup using a phylogenetic tree.
+3. Search for ancient samples with matching or ancestral haplogroups.
+4. Visualize connections on an interactive timeline with lineage paths.
 
 Usage:
+Run the app locally with:
+    streamlit run AncientConnections.py
 
+User-defined functions:
+- get_lineage(haplogroup, tree): 
+    Returns the full maternal lineage for a given haplogroup using the mtDNA phylogenetic tree.
+- infer_parent(haplogroup, tree): 
+    Heuristically infers the closest ancestral haplogroup if a specific node is missing from the tree.
+- find_common_mtDNA(haplo1, haplo2, tree): 
+    Identifies the most recent common maternal haplogroup shared between two users.
+- bezier_curve(x_start, x_end, y_start, y_end, ...): 
+    Generates smooth Bezier curves to visually connect samples along the timeline.
+- format_year(year):
+    restructures continous timescale back to historical annotation (BCE, CE)
 
-Version: 1.00
-Date: 2025-03-13
+Version: 1.00  
+Date: 2025-03-13  
 Name: Tabea Dittmar
 """
 
@@ -63,7 +85,7 @@ test_users = {
 }
 
 #%%
-#FUNCTIONS
+# DEFINE FUNCTIONS
 #______________________________________________________________________________
 
 def get_lineage(haplogroup, tree):
@@ -73,7 +95,7 @@ def get_lineage(haplogroup, tree):
     """
     lineage = []
 
-    # If haplogroup is missing, try to infer its closest known ancestor
+    # If haplogroup is missing in the tree, try to infer its closest known ancestor
     if haplogroup not in tree:
         haplogroup = infer_parent(haplogroup, tree) or "mt-MRCA"
 
@@ -100,7 +122,7 @@ def infer_parent(haplogroup, tree):
 
 def find_common_mtDNA(haplo1, haplo2, tree):
     """
-    Finds the Most Recent Common Ancestor (MRCA) of two haplogroups.
+    Finds the most recent shared haplogroup of two haplogroups.
     """
     lineage1 = get_lineage(haplo1, tree)
     lineage2 = get_lineage(haplo2, tree)
@@ -150,9 +172,10 @@ with col1:
 
         if user1_haplo_input:
             haplo = user1_haplo_input.strip().upper()
-        # Validate haplogroup entry
+            # Validate haplogroup entry (has to be in the tree)
             if haplo in phylo_tree:
                 user1_haplo = haplo
+            # Otherwise print warning
             else:
                 st.warning("Please enter a valid Haplogroup.")
 
@@ -175,7 +198,7 @@ with col1:
             (valid_data["Epoch"] == epoch1)
         ]["Identifier"], key="sample1")
 
-        # Retrieve the mt_hg and Year values
+        # Retrieve the mt_hg and year values
         user1_haplo = valid_data[valid_data["Identifier"] == sample1]["mt_hg"].values[0]
         user1_year = valid_data[valid_data["Identifier"] == sample1]["Year"].values[0]
 
@@ -193,7 +216,6 @@ with col1:
 
         if user2_haplo_input:
             haplo = user2_haplo_input.strip().upper()
-        # Validate haplogroup entry
             if haplo in phylo_tree:
                 user2_haplo = haplo
             else:
@@ -215,18 +237,22 @@ with col1:
         user2_haplo = valid_data[valid_data["Identifier"] == sample2]["mt_hg"].values[0]
         user2_year = valid_data[valid_data["Identifier"] == sample2]["Year"].values[0]
         
-# MAKE SURE 2 DIFFERENT SAMPLES ARE SELECTED
+# CHECK: Make sure two different samples are selected
+# ---------------------------------------------------
+# Only proceed if both users have valid haplogroups
 if user1_haplo and user2_haplo:
+    # Case: Identical haplogroup and year — likely the same person
     if (user1_haplo == user2_haplo) and (user1_year == user2_year):
         skip_comparison = True
         identity_warning = "Person 1 and Person 2 are identical. Please select different samples."
     else:
+        # Valid comparison between two distinct users
         skip_comparison = False
         identity_warning = ""
 else:
+    # One or both haplogroups missing — skip comparison
     skip_comparison = True
     identity_warning = ""
-
 
 #%%
 # GET MOST RECENT HAPLOGROUP AND LINEAGE
@@ -236,9 +262,10 @@ else:
 common_mtDNA = find_common_mtDNA(user1_haplo, user2_haplo, phylo_tree)
 
 # GET LINEAGE
-# Compute Shared Lineage (From mt-MRCA to Shared Haplogroup)**
+#------------
+# Compute Shared Lineage (From mt-MRCA to Shared Haplogroup)
 shared_lineage = get_lineage(common_mtDNA, phylo_tree)
-shared_lineage_set = set(shared_lineage)  # ✅ Convert to set for faster lookups
+shared_lineage_set = set(shared_lineage)
 
 # Compute Individual Lineages
 user1_lineage = get_lineage(user1_haplo, phylo_tree)
@@ -262,6 +289,7 @@ else:
 # Get all ancient samples from the lineage
 lineage_samples = mtDNA_data[
     (mtDNA_data["mt_hg"].isin(shared_lineage_set)) &
+    # have to be younger than users
     (mtDNA_data["year_from"] <= min(user1_year, user2_year))
 ].copy()
 
@@ -276,24 +304,30 @@ lineage_samples = lineage_samples.sort_values(by=["lineage_depth", "year_from"])
 # Convert to list for plotting
 lineage_samples_list = lineage_samples.to_dict(orient="records")
 
-# -----------------------------------------------
+
 # Filter lineage samples to preserve lineage + time order
-# -----------------------------------------------
+# -------------------------------------------------------
+# Goal: Select a clean subset of ancient samples along the shared maternal lineage,
+# keeping only one representative per haplogroup (or closest in time),
+# while ensuring samples get progressively more ancient as you move up the lineage.
 
 filtered_lineage = []
-last_depth = -1
-last_year = float('-inf')
-last_hg = None
+last_depth = -1  # Track position in the shared haplogroup lineage
+last_year = float('-inf')  # Track most recent sample added
+last_hg = None  # Track last haplogroup added
 
 for sample in lineage_samples_list:
     hg = sample["mt_hg"]
     year = sample["year_from"]
+
+    # Get the haplogroup's depth in the shared lineage
     depth = shared_lineage.index(hg) if hg in shared_lineage else None
 
+    # Skip if not in the defined shared lineage path
     if depth is None:
         continue
 
-    # Always allow first
+    # Always accept the first valid sample
     if not filtered_lineage:
         filtered_lineage.append(sample)
         last_depth = depth
@@ -310,7 +344,6 @@ for sample in lineage_samples_list:
         last_year = year
         last_hg = hg
 
-
 # Replace lineage_samples_list with the filtered version
 lineage_samples_list = filtered_lineage
 
@@ -321,29 +354,6 @@ show_common_mtDNA = not any(ancestor["mt_hg"] == common_mtDNA for ancestor in li
 # %%
 # PLOT
 #______________________________________________________________________________
-
-# DEFINE SCALES
-#------------------------------------------------------------------------------
-# Epoch scale:
-epoch_definitions = {
-    "Paleolithic": (-50000, -12000),
-    "Mesolithic": (-12000, -8000),
-    "Neolithic": (-8000, -3000),
-    "Bronze Age": (-3000, -1200),
-    "Iron Age": (-1200, 500),
-    "Middle Ages": (500, 1500),
-    "Modern Age": (1500, 2025)
-}
-
-epoch_colors = {
-    "Paleolithic": "#6E6E6E",
-    "Mesolithic": "#2E8B57",
-    "Neolithic": "#BDB76B",
-    "Bronze Age": "#8B4513",
-    "Iron Age": "#CD5C5C",
-    "Middle Ages": "#800080",
-    "Modern Age": "#4682B4"
-}
 
 # Initialize timeline data
 labels = ["User 1", "User 2"]
@@ -367,11 +377,16 @@ years = []
 colors = []
 hover_texts = []
 
-# --- Add all ancestors ---
+# ADD ALL ANCESTORS TO THE PLOT
+# ------------------------------
+# Loop through each ancient sample in the shared lineage and add it to the plot
 for i, ancestor in enumerate(lineage_samples_list):
-    labels.append(ancestor["identifier"])
-    years.append(ancestor["year_from"])
+    labels.append(ancestor["identifier"])                # Sample ID
+    years.append(ancestor["year_from"])                  # Date for X-axis
+    # Highlight the one that exactly matches the shared haplogroup
     colors.append("darkblue" if ancestor["mt_hg"] == common_mtDNA else "lightblue")
+    
+    # Detailed hover info per sample
     hover_texts.append(
         f"<b>Ancestor</b>: {ancestor['identifier']}<br>"
         f"<b>Haplogroup</b>: {ancestor['mt_hg']}<br>"
@@ -380,10 +395,14 @@ for i, ancestor in enumerate(lineage_samples_list):
         f"<b>Lifespan</b>: {ancestor['year_from']} to {ancestor['year_to']}"
     )
 
-# --- Add shared haplogroup if no direct match found ---
+# Add a synthetic node for the shared haplogroup if no direct ancient sample exists
 if not any(ancestor["mt_hg"] == common_mtDNA for ancestor in lineage_samples_list):
+    # Estimate position further back in time
     shared_haplogroup_year = min(user1_year, user2_year) - 500
+    # Estimate Y position just above users
     shared_haplogroup_pos = (y_positions[0] + ancestor_step) if y_positions else 1.0
+
+    # Insert shared haplogroup node at the beginning of the timeline
     labels.insert(0, common_mtDNA)
     years.insert(0, shared_haplogroup_year)
     y_positions.insert(0, shared_haplogroup_pos)
@@ -392,25 +411,30 @@ if not any(ancestor["mt_hg"] == common_mtDNA for ancestor in lineage_samples_lis
         f"<b>Shared Haplogroup</b>: {common_mtDNA}<br>"
         "This is the most recent common haplogroup shared by both users. No ancient database sample found."
     ))
+    
+# ADD USERS AT THE BOTTOM
+# -------------------------
+# Position users at the bottom of the plot, below all ancestors
+user1_y = -user_gap                    # Base Y position for User 1
+user2_y = user1_y - 0.4               # Slight vertical offset to separate User 2 visually
 
-# --- Add users at the bottom ---
-user1_y = -user_gap
-user2_y = user1_y - 0.4  # Slight vertical offset for clarity
+# Add users to the plot data
+labels.extend(["User 1", "User 2"])   # Display names
+years.extend([user1_year, user2_year])  # X-axis values (time)
+y_positions.extend([user1_y, user2_y])  # Y-axis placement
+colors.extend(["orange", "purple"])     # User-specific colors
 
-labels.extend(["User 1", "User 2"])
-years.extend([user1_year, user2_year])
-y_positions.extend([user1_y, user2_y])
-colors.extend(["orange", "purple"])
+# Add basic hover text with haplogroup info
 hover_texts.extend([
     f"User 1: {user1_haplo}",
     f"User 2: {user2_haplo}"
 ])
 
-
-# **Create Plotly Figure**
+# CREATE FIGURE
+#--------------
 fig = go.Figure()
 
-# **Add Scatter Points**
+# Add Scatter Points
 fig.add_trace(go.Scatter(
     x=years, 
     y=y_positions, 
@@ -423,32 +447,36 @@ fig.add_trace(go.Scatter(
 ))
 
 # ADD CONNECTION LINES
-#------------------------------------------------------------------------------
-# **Bezier Curve Function for Smooth Connections**
+#----------------------
+# Bezier Curve Function for Smooth Connections
 def bezier_curve(x_start, x_end, y_start, y_end, curve_direction="up", num_points=100, stop_offset=5):
     """ Generate curved Bezier path for smooth connections. """
     t = np.linspace(0, 1, num_points)
-    # **Dynamic Control Point:**
+    # Dynamic Control Point:
     control_y = (y_start + y_end) / 2  # Default middle control point
     control_x = (x_start + x_end) / 2  # Midpoint in X
-    # **Push Control Point Higher or Lower to Strengthen the Curve**
+    # Push Control Point Higher or Lower to Strengthen the Curve
     vertical_distance = abs(y_end - y_start)
     curve_strength = vertical_distance * 0.5  # Increase strength based on spacing
     if curve_direction == "up":
         control_y += curve_strength  # Push control point UP
     else:
         control_y -= curve_strength  # Push control point DOWN
-    # **Bezier Curve Calculation**
+    # Bezier Curve Calculation
     bezier_x = (1 - t) ** 2 * x_start + 2 * (1 - t) * t * control_x + t ** 2 * x_end
     bezier_y = (1 - t) ** 2 * y_start + 2 * (1 - t) * t * control_y + t ** 2 * y_end
-    # **Apply Offset to Avoid Sharp Stops**
+    # Apply Offset to Avoid Sharp Stops
     bezier_x[-1] = bezier_x[-1] - stop_offset  
 
     return bezier_x, bezier_y
 
+# ADD SHARED HAPLOGROUP NODE (IF NOT ALREADY IN DATA)
+# -----------------------------------------------------
 if show_common_mtDNA:
-    shared_haplogroup_year = min(user1_year, user2_year) - 500
-    shared_haplogroup_pos = (y_positions[0] + y_positions[-1]) / 2  # Between users
+    # Place shared haplogroup before all samples (a synthetic anchor point)
+    shared_haplogroup_year = min(user1_year, user2_year) - 500  # Push back in time
+    shared_haplogroup_pos = (y_positions[0] + y_positions[-1]) / 2  # Center between users
+
     labels.insert(0, common_mtDNA)
     years.insert(0, shared_haplogroup_year)
     y_positions.insert(0, shared_haplogroup_pos)
@@ -458,11 +486,10 @@ if show_common_mtDNA:
         "This is the most recent common haplogroup shared by both users."
     ))
 
+# Build a lookup for each label's Y position
 y_position_map = {label: y for label, y in zip(labels, y_positions)}
 
-
-# ------------------------------------------------------------------
-# 🔗 2. Connect Users → Most Recent Ancestor
+# 1. Connect Users → Most Recent Ancestor
 #      (only if shared haplogroup dot not shown)
 # ------------------------------------------------------------------
 if lineage_samples_list and not show_common_mtDNA:
@@ -476,10 +503,7 @@ if lineage_samples_list and not show_common_mtDNA:
             )
             fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode="lines", line=dict(color="lightblue", width=2)))
 
-
-
-# ------------------------------------------------------------------
-# 🔗 3. Connect Ancestors to Each Other (in order)
+# 2. Connect Ancestors to Each Other (in order)
 # ------------------------------------------------------------------
 for i in range(len(lineage_samples_list) - 1):
     older = lineage_samples_list[i]
@@ -493,8 +517,7 @@ for i in range(len(lineage_samples_list) - 1):
         )
         fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode="lines", line=dict(color="lightblue", width=2)))
 
-# ------------------------------------------------------------------
-# 🔗 4. If shared haplogroup was added (i.e., not found in data)
+# 3. If shared haplogroup was added (i.e., not found in data)
 # ------------------------------------------------------------------
 if show_common_mtDNA and common_mtDNA in y_position_map:
 
@@ -524,9 +547,32 @@ if show_common_mtDNA and common_mtDNA in y_position_map:
                 line=dict(color="grey", width=2, dash="dash")
             ))
             
-            
-# **Step 2: Dynamically Filter Epochs in Range**
-# Step 1: Prepare Epoch Data
+#%%
+# PLOT VISUALS
+#______________________________________________________________________________           
+
+# Epoch scale:
+epoch_definitions = {
+    "Paleolithic": (-50000, -12000),
+    "Mesolithic": (-12000, -8000),
+    "Neolithic": (-8000, -3000),
+    "Bronze Age": (-3000, -1200),
+    "Iron Age": (-1200, 500),
+    "Middle Ages": (500, 1500),
+    "Modern Age": (1500, 2025)
+}
+
+epoch_colors = {
+    "Paleolithic": "#6E6E6E",
+    "Mesolithic": "#2E8B57",
+    "Neolithic": "#BDB76B",
+    "Bronze Age": "#8B4513",
+    "Iron Age": "#CD5C5C",
+    "Middle Ages": "#800080",
+    "Modern Age": "#4682B4"
+}
+# Dynamically Filter Epochs in Range
+# Prepare Epoch Data
 filtered_epochs = []
 epoch_positions = []
 epoch_tick_labels = []
@@ -538,17 +584,17 @@ for epoch, (start, end) in epoch_definitions.items():
         epoch_positions.append((start + end) / 2)
         epoch_tick_labels.append(epoch)
 
-# Step 2: Define Time Scale (X-Axis) Tick Formatting
+# Define Time Scale (X-Axis) Tick Formatting
 tick_positions = np.linspace(min_year, max_year, num=10).astype(int)
 tick_labels = [f"{abs(t)} BCE" if t < 0 else f"{t} CE" for t in tick_positions]
 
-# Step 3: Y-Axis Range — Add dynamic space below lowest Y for epoch bar
+# Y-Axis Range — Add dynamic space below lowest Y for epoch bar
 y_buffer_bottom = 0.6  # space below users
 y_buffer_top = 0.5     # optional space above ancestors
 y_min = min(y_positions) - y_buffer_bottom
 y_max = max(y_positions) + y_buffer_top
 
-# Step 4: Update Layout
+# Update Layout
 fig.update_layout(
     xaxis=dict(
         title="Time (Years BCE/CE)",
@@ -570,13 +616,13 @@ fig.update_layout(
     ),
     yaxis=dict(
         visible=False,
-        range=[y_min, y_max],  # 👈 Ensures enough space for epoch bar and users
+        range=[y_min, y_max],
     ),
     showlegend=False,
-    margin=dict(l=60, r=60, t=60, b=120),  # bottom margin allows room for epochs
+    margin=dict(l=60, r=60, t=60, b=120),
 )
 
-# Step 5: Draw Epoch Bars and Labels
+# Draw Epoch Bars and Labels
 for epoch, (start, end) in epoch_definitions.items():
     if start <= max_year and end >= min_year:
         x0 = max(start, min_year)
@@ -607,7 +653,9 @@ for epoch, (start, end) in epoch_definitions.items():
         )
 
         
-# GENERATE TEXT ABOUT RECENT CONNECTION
+#%%
+# GENERATE SUMMARY TEXR
+#______________________________________________________________________________
 
 # Find the most recent (youngest) ancient individual in the shared lineage
 if lineage_samples_list:
@@ -616,9 +664,17 @@ else:
     best_ancestor = None
 
 # Extract User Info
-user1_name = "Test User 1" if user1_method == "Test User" else (sample1 if user1_method == "Database Sample" else "Manual Entry")
-user2_name = "Test User 2" if user2_method == "Test User" else (sample2 if user2_method == "Database Sample" else "Manual Entry")
+user1_name = (
+    "Test User 1" if user1_method == "Test User"
+    else sample1 if user1_method == "Database Sample"
+    else f"Manual Entry ({user1_haplo})"
+)
 
+user2_name = (
+    "Test User 2" if user2_method == "Test User"
+    else sample2 if user2_method == "Database Sample"
+    else f"Manual Entry ({user2_haplo})"
+)
 # Time formatting: negative = BCE, positive = CE
 def format_year(year):
     return f"{abs(int(year))} BCE" if year < 0 else f"{int(year)} CE"
@@ -641,16 +697,20 @@ if best_ancestor:
 else:
     recent_connection_text = f"""
     <b>No ancient ancestor found for {user1_name} and {user2_name}.</b><br>
-    This lineage has no matching historical samples in the database. Try selecting a different pair or exploring other lineages.
+    These individuals have no ancient ancestor in the Database. Try selecting different samples or input methods.
     """
 
 #%%
 # DISPLAY IN STREAMLIT
 #______________________________________________________________________________
 
+# Display warning or summary box
 with col2:
+    # Show a warning if the same individual was selected
     if identity_warning:
         st.warning(identity_warning)
+
+    # Show summary box if valid comparison
     if not skip_comparison:
         st.markdown(
             f"""
@@ -666,22 +726,26 @@ with col2:
             unsafe_allow_html=True
         )
 
-# --- COLUMN 2: Display plot and lineages if not skipped ---
-with col2:
+# Timeline and Lineage Visuals
     if not skip_comparison:
+        # Timeline plot section
         st.subheader("Timeline")
         st.plotly_chart(fig, use_container_width=True)
 
+        # Lineage section for both users and shared ancestry
         st.subheader("Individual and Shared Lineages")
+
+        # CSS for layout styling
         st.markdown(
             f"""
             <style>
                 .haplo-container {{
                     display: flex;
                     justify-content: center;
-                    align-items: center;
+                    align-items: flex-start;
                     gap: 30px;
                     margin-bottom: 20px;
+                    flex-wrap: wrap;
                 }}
                 .haplo-left {{
                     display: flex;
