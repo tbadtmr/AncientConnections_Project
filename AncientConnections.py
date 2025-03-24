@@ -64,6 +64,7 @@ test_users = {
 
 #%%
 #FUNCTIONS
+#______________________________________________________________________________
 
 def get_lineage(haplogroup, tree):
     """
@@ -506,7 +507,7 @@ if show_common_mtDNA and common_mtDNA in y_position_map:
         )
         fig.add_trace(go.Scatter(
             x=x_vals, y=y_vals, mode="lines",
-            line=dict(color="black", width=2, dash="dash")
+            line=dict(color="grey", width=2, dash="dash")
         ))
 
     # Connect shared haplogroup → oldest ancestor
@@ -520,7 +521,7 @@ if show_common_mtDNA and common_mtDNA in y_position_map:
             )
             fig.add_trace(go.Scatter(
                 x=x_vals, y=y_vals, mode="lines",
-                line=dict(color="black", width=2, dash="dash")
+                line=dict(color="grey", width=2, dash="dash")
             ))
             
             
