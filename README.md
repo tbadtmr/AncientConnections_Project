@@ -22,7 +22,7 @@ This app requires the following Python packages:
 - `numpy >= 1.24`
 - `plotly >= 6.0`
 
-To ensure full compatibility and reproducibility, it is recommended to sett up a new Conda environment:
+To ensure full compatibility and reproducibility, it is recommended to set up a new Conda environment:
 
 ```bash
 conda create -n ancient_connections python=3.9
@@ -36,7 +36,7 @@ Once the environment is set, the app can be run with:
 ```bash
 streamlit run AncientConnections.py
 ```
-Then open the app in your browser at the local address provided by Streamlit
+Then open the app in your browser at the local address provided by Streamlit.
 
 ## Data
 
